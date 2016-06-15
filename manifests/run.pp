@@ -66,6 +66,7 @@ define docker::run(
   $username = false,
   $hostname = false,
   $env = [],
+  $env_data = undef,
   $env_file = [],
   $dns = [],
   $dns_search = [],
@@ -95,6 +96,7 @@ define docker::run(
   $remove_container_on_stop = true,
   $remove_volume_on_start = false,
   $remove_volume_on_stop = false,
+  $env_dir = $docker::params::env_dir,
 ) {
   include docker::params
   $docker_command = $docker::params::docker_command
@@ -144,6 +146,8 @@ define docker::run(
       withpath => true,
     }
   }
+  
+  
 
   validate_hash($extra_systemd_parameters)
 
@@ -158,6 +162,18 @@ define docker::run(
   $after_array = any2array($after)
   $depends_array = any2array($depends)
   $depend_services_array = any2array($depend_services)
+  
+  if $env_data != undef {
+    file { "${env_dir}/${title}.env":
+      content => template("docker/env.erb"),
+      owner => root,
+      group => root,
+      mode => '0644',
+    }
+    $real_env_file = "${env_dir}/${title}.env"
+  } else {
+    $real_env_file = $env_file
+  }
 
   $docker_run_flags = docker_run_flags({
     cpuset          => any2array($cpuset),
@@ -166,7 +182,7 @@ define docker::run(
     dns             => any2array($dns),
     dns_search      => any2array($dns_search),
     env             => any2array($env),
-    env_file        => any2array($env_file),
+    env_file        => any2array($real_env_file),
     expose          => any2array($expose),
     extra_params    => any2array($extra_parameters),
     hostentries     => any2array($hostentries),
