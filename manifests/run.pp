@@ -97,6 +97,7 @@ define docker::run(
   $remove_volume_on_start = false,
   $remove_volume_on_stop = false,
   $env_dir = $docker::params::env_dir,
+  $network_alias = undef,
 ) {
   include docker::params
   $docker_command = $docker::params::docker_command
@@ -191,6 +192,7 @@ define docker::run(
     lxc_conf        => any2array($lxc_conf),
     memory_limit    => $memory_limit,
     net             => $net,
+    network_alias   => $network_alias,
     ports           => any2array($ports),
     labels          => any2array($labels),
     privileged      => $privileged,
