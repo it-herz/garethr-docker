@@ -14,6 +14,7 @@ class docker::params {
   $tls_key                           = '/etc/docker/tls/key.pem'
   $ip_forward                        = true
   $iptables                          = true
+  $icc                               = undef
   $ip_masq                           = true
   $bip                               = undef
   $mtu                               = undef
@@ -73,6 +74,7 @@ class docker::params {
   $storage_pool_autoextend_percent   = undef
   $storage_config_template           = 'docker/etc/sysconfig/docker-storage.erb'
   $compose_version                   = '1.7.0'
+  $compose_install_path              = '/usr/local/bin'
 
   case $::osfamily {
     'Debian' : {
@@ -83,14 +85,17 @@ class docker::params {
             $service_provider        = 'systemd'
             $storage_config          = '/etc/default/docker-storage'
             $service_config_template = 'docker/etc/sysconfig/docker.systemd.erb'
+            $service_overrides_template = 'docker/etc/systemd/system/docker.service.d/service-overrides-debian.conf.erb'
             $service_hasstatus       = true
             $service_hasrestart      = true
             include docker::systemd_reload
           } else {
             $service_config_template = 'docker/etc/default/docker.erb'
+            $service_overrides_template = undef
             $service_provider        = 'upstart'
             $service_hasstatus       = true
             $service_hasrestart      = false
+            $storage_config          = undef
           }
         }
         default: {
@@ -100,11 +105,16 @@ class docker::params {
             $storage_config             = '/etc/default/docker-storage'
             $service_config_template    = 'docker/etc/sysconfig/docker.systemd.erb'
             $service_overrides_template = 'docker/etc/systemd/system/docker.service.d/service-overrides-debian.conf.erb'
-            $service_hasstatus       = true
-            $service_hasrestart      = true
+            $service_hasstatus          = true
+            $service_hasrestart         = true
             include docker::systemd_reload
           } else {
-            $service_config_template = 'docker/etc/default/docker.erb'
+            $service_provider           = undef
+            $storage_config             = undef
+            $service_config_template    = 'docker/etc/default/docker.erb'
+            $service_overrides_template = undef
+            $service_hasstatus          = undef
+            $service_hasrestart         = undef
           }
         }
       }
@@ -118,6 +128,8 @@ class docker::params {
       $use_upstream_package_source = true
       $repo_opt = undef
       $nowarn_kernel = false
+      $service_config = undef
+      $storage_setup_file = undef
 
       $package_cs_source_location = 'http://packages.docker.com/1.9/apt/repo'
       $package_cs_key_source = 'http://packages.docker.com/1.9/apt/gpg'
@@ -126,7 +138,8 @@ class docker::params {
       $package_key_source = 'http://apt.dockerproject.org/gpg'
       $package_key = '58118E89F3A912897C070ADBF76221572C52609D'
 
-      if ($::operatingsystem == 'Debian' and versioncmp($::operatingsystemmajrelease, '8') >= 0) or ($::operatingsystem == 'Ubuntu' and versioncmp($::operatingsystemrelease, '15.04') >= 0) {
+      if ($::operatingsystem == 'Debian' and versioncmp($::operatingsystemmajrelease, '8') >= 0) or
+        ($::operatingsystem == 'Ubuntu' and versioncmp($::operatingsystemrelease, '15.04') >= 0) {
         $detach_service_in_init = false
       } else {
         $detach_service_in_init = true
@@ -136,6 +149,7 @@ class docker::params {
     'RedHat' : {
       $service_config = '/etc/sysconfig/docker'
       $storage_config = '/etc/sysconfig/docker-storage'
+      $storage_setup_file = '/etc/sysconfig/docker-storage-setup'
       $service_hasstatus  = true
       $service_hasrestart = true
 
@@ -241,6 +255,8 @@ class docker::params {
       $service_hasrestart = true
       $service_config = '/etc/conf.d/docker'
       $service_config_template = 'docker/etc/conf.d/docker.erb'
+      $storage_config = undef
+      $storage_setup_file = undef
     }
     'Gentoo' : {
       $manage_epel = false
@@ -263,6 +279,8 @@ class docker::params {
       $service_hasrestart = true
       $service_config = '/etc/conf.d/docker'
       $service_config_template = 'docker/etc/conf.d/docker.gentoo.erb'
+      $storage_config = undef
+      $storage_setup_file = undef
     }
     default: {
       $manage_epel = false
@@ -273,14 +291,20 @@ class docker::params {
       $package_repos = undef
       $package_release = undef
       $use_upstream_package_source = true
+      $service_overrides_template = undef
       $service_hasstatus  = undef
       $service_hasrestart = undef
+      $service_provider = undef
       $package_name = $package_name_default
       $service_name = $service_name_default
       $docker_command = $docker_command_default
       $detach_service_in_init = true
       $repo_opt = undef
       $nowarn_kernel = false
+      $service_config = undef
+      $storage_config = undef
+      $storage_setup_file = undef
+      $service_config_template = undef
     }
   }
 
