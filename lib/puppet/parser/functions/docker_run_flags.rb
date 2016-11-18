@@ -22,6 +22,10 @@ module Puppet::Parser::Functions
       flags << "--net #{opts['net']}"
     end
 
+    if opts['network_alias']
+      flags << "--network-alias #{opts['network_alias']}"
+    end
+
     if opts['memory_limit']
       flags << "-m #{opts['memory_limit']}"
     end
