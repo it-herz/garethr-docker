@@ -97,7 +97,7 @@ define docker::run(
   $remove_volume_on_start = false,
   $remove_volume_on_stop = false,
   $env_dir = $docker::params::env_dir,
-  $network_alias = undef,
+  $network_alias = false,
   $stop_wait_time = 0,
 ) {
   include docker::params
