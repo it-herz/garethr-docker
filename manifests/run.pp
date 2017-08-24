@@ -15,6 +15,11 @@
 #
 #    extra_parameters => ['--restart=always']
 #
+# However, if your system is using sytemd this restart policy will be
+# ineffective because the ExecStop commands will run which will cause
+# docker to stop restarting it.  In this case you should use the
+# systemd_restart option to specify the policy you want.
+#
 # This will allow the docker container to be restarted if it dies, without
 # puppet help.
 #
@@ -48,6 +53,12 @@
 # command. Useful for adding additional new or experimental options that the
 # module does not yet support.
 #
+# [*systemd_restart*]
+# (optional) If the container is to be managed by a systemd unit file set the
+# Restart option on the unit file.  Can be any valid value for this systemd
+# configuration.  Most commonly used are on-failure or always.
+# Default: on-failure
+#
 define docker::run(
   $image,
   $ensure = 'present',
@@ -80,6 +91,7 @@ define docker::run(
   $privileged = false,
   $detach = undef,
   $extra_parameters = undef,
+  $systemd_restart = 'on-failure',
   $extra_systemd_parameters = {},
   $pull_on_start = false,
   $after = [],
@@ -99,6 +111,7 @@ define docker::run(
   $env_dir = $docker::params::env_dir,
   $network_alias = false,
   $stop_wait_time = 0,
+  $syslog_identifier = undef,
 ) {
   include docker::params
   if ($socket_connect != []) {
@@ -108,16 +121,19 @@ define docker::run(
     $docker_command = $docker::params::docker_command
   }
   $service_name = $docker::params::service_name
+  $docker_group = $docker::params::docker_group
 
   validate_re($image, '^[\S]*$')
   validate_re($title, '^[\S]*$')
   validate_re($memory_limit, '^[\d]*(b|k|m|g)$')
   validate_re($ensure, '^(present|absent)')
   if $restart {
-    validate_re($restart, '^(no|always|on-failure)|^on-failure:[\d]+$')
+    validate_re($restart, '^(no|always|unless-stopped|on-failure)|^on-failure:[\d]+$')
   }
   validate_string($docker_command)
   validate_string($service_name)
+  validate_string($docker_group)
+
   if $command {
     validate_string($command)
   }
@@ -159,6 +175,9 @@ define docker::run(
   
 
   validate_hash($extra_systemd_parameters)
+  if $systemd_restart {
+    validate_re($systemd_restart, '^(no|always|on-success|on-failure|on-abnormal|on-abort|on-watchdog)$')
+  }
 
   if $detach == undef {
     $valid_detach = $docker::params::detach_service_in_init
@@ -211,19 +230,19 @@ define docker::run(
     volumes_from    => any2array($volumes_from),
   })
 
-  $sanitised_title = regsubst($title, '[^0-9A-Za-z.\-]', '-', 'G')
+  $sanitised_title = regsubst($title, '[^0-9A-Za-z.\-_]', '-', 'G')
   if empty($depends_array) {
     $sanitised_depends_array = []
   }
   else {
-    $sanitised_depends_array = regsubst($depends_array, '[^0-9A-Za-z.\-]', '-', 'G')
+    $sanitised_depends_array = regsubst($depends_array, '[^0-9A-Za-z.\-_]', '-', 'G')
   }
 
   if empty($after_array) {
     $sanitised_after_array = []
   }
   else {
-    $sanitised_after_array = regsubst($after_array, '[^0-9A-Za-z.\-]', '-', 'G')
+    $sanitised_after_array = regsubst($after_array, '[^0-9A-Za-z.\-_]', '-', 'G')
   }
 
   if $restart {
@@ -253,12 +272,12 @@ define docker::run(
           $initscript = "/etc/systemd/system/${service_prefix}${sanitised_title}.service"
           $init_template = 'docker/etc/systemd/system/docker-run.erb'
           $uses_systemd = true
-          $mode = '0644'
+          $mode = '0640'
         } else {
           $uses_systemd = false
           $initscript = "/etc/init.d/${service_prefix}${sanitised_title}"
           $init_template = 'docker/etc/init.d/docker-run.erb'
-          $mode = '0755'
+          $mode = '0750'
         }
       }
       'RedHat': {
@@ -266,13 +285,13 @@ define docker::run(
           $initscript     = "/etc/init.d/${service_prefix}${sanitised_title}"
           $init_template  = 'docker/etc/init.d/docker-run.erb'
           $hasstatus      = undef
-          $mode           = '0755'
+          $mode           = '0750'
           $uses_systemd   = false
         } else {
           $initscript     = "/etc/systemd/system/${service_prefix}${sanitised_title}.service"
           $init_template  = 'docker/etc/systemd/system/docker-run.erb'
           $hasstatus      = true
-          $mode           = '0644'
+          $mode           = '0640'
           $uses_systemd   = true
         }
       }
@@ -280,19 +299,25 @@ define docker::run(
         $initscript     = "/etc/systemd/system/${service_prefix}${sanitised_title}.service"
         $init_template  = 'docker/etc/systemd/system/docker-run.erb'
         $hasstatus      = true
-        $mode           = '0644'
+        $mode           = '0640'
         $uses_systemd   = true
       }
       'Gentoo': {
         $initscript     = "/etc/init.d/${service_prefix}${sanitised_title}"
         $init_template  = 'docker/etc/init.d/docker-run.gentoo.erb'
         $hasstatus      = true
-        $mode           = '0775'
+        $mode           = '0770'
         $uses_systemd   = false
       }
       default: {
         fail('Docker needs a Debian, RedHat, Archlinux or Gentoo based system.')
       }
+    }
+
+    if $syslog_identifier {
+      $_syslog_identifier = $syslog_identifier
+    } else {
+      $_syslog_identifier = "${service_prefix}${sanitised_title}"
     }
 
 
@@ -318,6 +343,8 @@ define docker::run(
       file { $initscript:
         ensure  => present,
         content => template($init_template),
+        owner   => 'root',
+        group   => $docker_group,
         mode    => $mode,
       }
 
@@ -345,11 +372,11 @@ define docker::run(
             exec { "/bin/sh /etc/init.d/${service_prefix}${sanitised_title} stop":
               onlyif  => join($transition_onlyif, ' '),
               require => [],
-            } ->
-            file { "/var/run/${service_prefix}${sanitised_title}.cid":
+            }
+            -> file { "/var/run/${service_prefix}${sanitised_title}.cid":
               ensure => absent,
-            } ->
-            File[$initscript]
+            }
+            -> File[$initscript]
           }
 
           if $uses_systemd {

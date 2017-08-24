@@ -37,9 +37,8 @@
 #   Defaults to 'true'.
 #
 class docker::service (
-  $docker_command                    = $docker::docker_command,
   $service_name                      = $docker::service_name,
-  $daemon_subcommand                 = $docker::daemon_subcommand,
+  $daemon_command                    = $docker::daemon_command,
   $tcp_bind                          = $docker::tcp_bind,
   $ip_forward                        = $docker::ip_forward,
   $iptables                          = $docker::iptables,
@@ -104,6 +103,7 @@ class docker::service (
   $service_overrides_template        = $docker::service_overrides_template,
   $service_hasstatus                 = $docker::service_hasstatus,
   $service_hasrestart                = $docker::service_hasrestart,
+  $daemon_environment_files          = $docker::daemon_environment_files,
   $tls_enable                        = $docker::tls_enable,
   $tls_verify                        = $docker::tls_verify,
   $tls_cacert                        = $docker::tls_cacert,
@@ -147,7 +147,7 @@ class docker::service (
   case $service_provider {
     'systemd': {
       file { '/etc/systemd/system/docker.service.d':
-        ensure => directory
+        ensure => directory,
       }
 
       if $service_overrides_template {
