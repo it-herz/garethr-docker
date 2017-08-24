@@ -31,7 +31,6 @@ class docker::repos {
             'deb' => true,
           }
         }
-        $ur
         $url_split = split($location, '/')
         $repo_host = $url_split[2]
         $pin_ensure = $docker::pin_upstream_package_source ? {
